@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "plane"
+name = "plane-hdl"
 version = "0.1.0"
 description = "A Python HDL inspired by Chisel"
 readme = "README.md"

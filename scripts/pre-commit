@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Pre-commit hook: run tests with coverage, update README badge, stage the change.
+set -euo pipefail
+
+# Run tests with coverage, capture output
+output=$(uv run python -m pytest tests/ --cov=src/plane --cov-report=term-missing 2>&1)
+
+# Extract coverage percentage from TOTAL line
+pct=$(echo "$output" | grep "^TOTAL" | awk '{print $4}' | tr -d '%')
+
+if [ -z "$pct" ]; then
+  echo "ERROR: Could not parse coverage from test output"
+  echo "$output"
+  exit 1
+fi
+
+# Determine badge color
+if [ "$pct" -ge 90 ]; then
+  color="green"
+elif [ "$pct" -ge 70 ]; then
+  color="yellow"
+else
+  color="red"
+fi
+
+# Update README badge
+sed -i "s|coverage-[0-9]*%25-[a-z]*|coverage-${pct}%25-${color}|" README.md
+
+# Stage the README if it changed
+if git diff --quiet README.md 2>/dev/null; then
+  echo "Coverage: ${pct}% (badge unchanged)"
+else
+  git add README.md
+  echo "Coverage: ${pct}% (badge updated)"
+fi

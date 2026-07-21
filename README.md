@@ -207,4 +207,4 @@ control to edit and changes were thoroughly reviewed. That being said, there wil
 
 ## Agent Skills
 
-The `skills/` directory contains `SKILL.md` files for coding harnesses. Copy `skills/plane-hdl/` and `skills/plane-csr/` into your `~/.claude/skills/` or `~/.config/opencode/skills/` directory for auto-discovery when working with plane.
+This repo is structured as a Claude Code plugin. The `skills/` directory holds `SKILL.md` files (one per subfolder), and `.claude-plugin/plugin.json` declares the plugin. Do not copy `SKILL.md` files elsewhere — install this repo as a plugin via a separate marketplace repo's `marketplace.json` using a `github` or `url` source pointing here. Once installed, the skills are invocable as `/<plugin-name>:<skill-name>` (e.g. `/plane:plane-hdl`, `/plane:plane-csr`).

@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Release script: bump version, commit, tag, push.
+# Ensures pyproject.toml version and git tag stay in sync so PyPI uploads don't
+# fail with "File already exists" (caused by tagging without bumping version).
+#
+# Usage: scripts/release [--dry-run] <version>   e.g. scripts/release 0.2.0
+#                        scripts/release -n 0.2.0    # dry run: validate, no writes
+set -euo pipefail
+
+dry_run=0
+if [ $# -eq 2 ] && { [ "$1" = "--dry-run" ] || [ "$1" = "-n" ]; }; then
+    dry_run=1
+    shift
+fi
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 [--dry-run|-n] <version>   e.g. $0 0.2.0"
+    exit 1
+fi
+
+new="$1"
+
+# Validate version format (X.Y.Z, optional leading v)
+if ! [[ "$new" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "ERROR: version must match X.Y.Z (e.g. 0.2.0)"
+    exit 1
+fi
+new="${new#v}"  # strip leading v
+tag="v$new"
+
+# Must be on main
+branch=$(git branch --show-current)
+if [ "$branch" != "main" ]; then
+    echo "ERROR: not on main (current: $branch). Switch to main after your PR merges."
+    exit 1
+fi
+
+# Working tree must be clean
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo "ERROR: working tree has uncommitted changes. Commit or stash first."
+    exit 1
+fi
+
+# Must be up to date with origin/main
+git fetch origin main >/dev/null
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+    echo "ERROR: local main diverges from origin/main. Pull/rebase first."
+    exit 1
+fi
+
+# Tag must not already exist
+if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+    echo "ERROR: tag $tag already exists"
+    exit 1
+fi
+
+# Version must actually change (prevents the PyPI "File already exists" failure)
+cur=$(grep -E '^version = ' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+if [ "$cur" = "$new" ]; then
+    echo "ERROR: pyproject.toml version is already $new. Bump it (e.g. $0 0.$(echo $cur | cut -d. -f2).$(($(echo $cur | cut -d. -f3)+1)))"
+    exit 1
+fi
+
+echo "Releasing $new (current: $cur)"
+
+if [ $dry_run -eq 1 ]; then
+    echo "[dry-run] would bump pyproject.toml: $cur -> $new"
+    [ -f .claude-plugin/plugin.json ] && echo "[dry-run] would bump .claude-plugin/plugin.json: -> $new"
+    echo "[dry-run] would commit 'release $tag', tag $tag, push main + $tag to origin"
+    echo "OK: dry run passed. Re-run without --dry-run to actually release."
+    exit 0
+fi
+
+# Bump pyproject.toml
+sed -i "s/^version = \".*\"/version = \"$new\"/" pyproject.toml
+
+# Bump .claude-plugin/plugin.json if present (keep plugin version in sync)
+if [ -f .claude-plugin/plugin.json ]; then
+    sed -i "s/\"version\": \".*\"/\"version\": \"$new\"/" .claude-plugin/plugin.json
+fi
+
+git add pyproject.toml .claude-plugin/plugin.json 2>/dev/null || git add pyproject.toml
+git commit -m "release $tag" >/dev/null
+git tag -a "$tag" -m "$tag"
+git push origin main
+git push origin "$tag"
+
+echo "Pushed $tag. PyPI publish workflow should trigger shortly."

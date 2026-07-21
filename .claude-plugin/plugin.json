@@ -1,0 +1,5 @@
+{
+  "name": "plane",
+  "description": "A Python HDL inspired by Chisel, emitting SystemVerilog",
+  "version": "0.1.0"
+}

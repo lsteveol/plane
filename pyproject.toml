@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plane-hdl"
-version = "0.1.2"
+version = "0.1.3"
 description = "A Python HDL inspired by Chisel"
 readme = "README.md"
 requires-python = ">=3.12"

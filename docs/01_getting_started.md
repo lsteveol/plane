@@ -5,7 +5,7 @@ plane is a Python-based hardware description language (HDL) inspired by [Chisel]
 ## Installation
 
 ```bash
-pip install plane
+pip install plane-hdl
 ```
 
 ## Your First Module

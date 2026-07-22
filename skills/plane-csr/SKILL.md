@@ -5,6 +5,14 @@ description: plane CSR subsystem — RegisterBlock/RegisterSystem, field types, 
 
 # plane CSR usage
 
+## Install
+
+Requires Python 3.12+.
+
+```bash
+uv add plane-hdl
+```
+
 ## Imports
 
 ```python

@@ -5,6 +5,14 @@ description: Idioms for describing hardware in plane (a Python HDL emitting Syst
 
 # plane HDL usage
 
+## Install
+
+Requires Python 3.12+.
+
+```bash
+uv add plane-hdl
+```
+
 ## Module shape
 
 ```python

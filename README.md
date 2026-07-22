@@ -11,7 +11,7 @@
 Requires Python 3.12+.
 
 ```bash
-uv add plane
+uv add plane-hdl
 ```
 
 ## Quick Start

@@ -90,7 +90,7 @@ def _gen_block_class(block) -> str:
         reg_builds.append(f"""    {reg.name} = {class_name}::type_id::create("{reg.name}");
     {reg.name}.configure(this, null, "");
     {reg.name}.build();
-    default_map.add_register({reg.name}, 'h{reg.offset:X});""")
+    default_map.add_reg({reg.name}, 'h{reg.offset:X});""")
 
     return f"""class {block.name} extends uvm_reg_block;
 {chr(10).join(reg_decls)}

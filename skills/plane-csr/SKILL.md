@@ -66,67 +66,86 @@ block = RegisterBlock(
 
 ## Field connections
 
-Use `connection=` to drive an external wire from a field. **Only applies when NOT calling `build()`** — when you're defining a block without building the full hardware:
+`connection=` wires a field's port to an external signal during `build()`. Define the block and its connection wires inside `elaborate()`:
+
+- **Output fields** (RW, WO, W1C, W1S): the field port drives the connected signal.
+- **Input fields** (RO, RC, RCW): the connected signal drives the field port.
 
 ```python
-self.enable_wire = Wire(UInt(1), name="enable")
-block = RegisterBlock(
-    name="timer",
-    width=32,
-    registers=[
-        Register(
-            name="ctrl",
-            offset=0x00,
-            fields=[RWField(name="enable", width=1, offset=0, reset=0, connection=self.enable_wire)],
-        ),
-    ],
-)
-# When you call block.build(adapter=...), connections are ignored.
-# The block's ports become the module's ports via the adapter.
+class Top(Module):
+    def elaborate(self):
+        self.enable_out = Wire(Bool(), name="enable_out")
+        self.status_in = Wire(Bool(), name="status_in")
+        block = RegisterBlock(
+            name="timer",
+            width=32,
+            registers=[
+                Register(
+                    name="ctrl",
+                    offset=0x00,
+                    fields=[
+                        RWField(name="enable", width=1, offset=0, reset=0, connection=self.enable_out),
+                        ROField(name="status", width=1, offset=1, connection=self.status_in),
+                    ],
+                ),
+            ],
+        )
+        self.csr = block.build(adapter_fn=apb3_adapter)
+        # ...connect self.csr.apb etc.
 ```
 
-Omit `connection=` when calling `build()` — the adapter handles port connections.
+`connection=` is optional for collateral-only flows (YAML, UVM RAL, HTML, C header). `width` is inferred from the connection when omitted.
 
 ## Building hardware
 
+`block.build()` returns a CSR submodule — call it **inside a `Module.elaborate()`** and connect its bus ports. `adapter_fn` selects the bus interface.
+
 ```python
-top = block.build(adapter=apb3_adapter)
-emitVerilog(top, filename="timer.sv")
+from plane.lib.amba.apb import APB3Bundle, apb3_adapter
+
+class Top(Module):
+    def elaborate(self):
+        self.apb = IO(APB3Bundle(addr_width=8, data_width=32), name="apb")
+        block = RegisterBlock(...)  # define as above
+        self.csr = block.build(adapter_fn=apb3_adapter)
+        self.apb @= self.csr.apb
+
+emitVerilog(Top(), filename="timer.sv")
 ```
 
-The adapter selects the bus interface. The block's ports become the module's ports.
+With `default_adapter` (omit `adapter_fn`), the CSR exposes raw `io_*` ports (`io_clk`, `io_addr`, `io_write_en`, `io_read_en`, `io_write_data`, `io_byte_en`) you wire individually.
 
 ## Bus adapters
 
 - `apb3_adapter` / `APB3Bundle` — APB3
 - `apb4_adapter` / `APB4Bundle` — APB4
-- `default_adapter` — auto-select based on available adapters
+- `default_adapter` — exposes raw `io_*` bus ports (`io_clk`, `io_addr`, `io_write_en`, `io_read_en`, `io_write_data`, `io_byte_en`)
 
 `bus_read_en` flows from the adapter to RC/RCW fields.
 
 ## Register systems
 
-Compose multiple blocks into an address-mapped system:
+`RegisterSystem` groups blocks/sub-systems into a hierarchical address map for **collateral generation only** (UVM RAL, HTML, YAML, C header) — not hardware generation. Build each block's hardware separately via `block.build()`.
 
 ```python
 system = RegisterSystem(
-    name="chip",
+    name="soc",
     children=[
-        SystemChild(block=timer_block, instance_name="timer", base=0x1000),
-        SystemChild(block=uarta_block, instance_name="uart", base=0x2000),
+        timer_block.to_system_child(file="timer.yaml", name="timer0", offset=0x1000, address_space=0x100),
+        uart_block.to_system_child(file="uart.yaml", name="uart0", offset=0x2000, address_space=0x100),
     ],
 )
-
-# Build top-level module with all blocks address-mapped
-top = system.build(adapter=apb3_adapter)
-emitVerilog(top, filename="chip.sv")
+system.to_uvm_ral("soc_ral.sv")
+system.to_html("soc.html")
 ```
 
-Multi-instance:
+Or construct `SystemChild` directly: `SystemChild(kind="block", file="timer.yaml", obj=timer_block, name="timer0", offset=0x1000, address_space=0x100)`.
+
+Multi-instance (same block, distinct name/offset):
 
 ```python
-SystemChild(block=timer_block, instance_name="timer0", base=0x1000),
-SystemChild(block=timer_block, instance_name="timer1", base=0x1100),
+timer_block.to_system_child(file="timer.yaml", name="timer0", offset=0x1000, address_space=0x100),
+timer_block.to_system_child(file="timer.yaml", name="timer1", offset=0x1100, address_space=0x100),
 ```
 
 ## Collateral
@@ -147,6 +166,8 @@ ral = block.to_uvm_ral()  # returns string
 # Access map: RCW -> WRC
 # Volatility: RO/W1C/W1S/RC/RCW = volatile
 ```
+
+**Name collision:** `build()` emits an SV module named `module_name` (defaults to `name`), while `to_uvm_ral()` emits a class named `name`. If they match and both are compiled in the same scope, you get a duplicate identifier. Set `module_name` distinct from `name` (e.g., `RegisterBlock(name="timer", module_name="timer_csr", ...)`), or wrap the RAL in a package without a wildcard `import` into the module's scope.
 
 **HTML** — generate documentation:
 

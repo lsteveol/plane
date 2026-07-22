@@ -143,11 +143,11 @@ class timer extends uvm_reg_block;
     ctrl = timer_ctrl::type_id::create("ctrl");
     ctrl.configure(this, null, "");
     ctrl.build();
-    default_map.add_register(ctrl, 'h0);
+    default_map.add_reg(ctrl, 'h0);
     status = timer_status::type_id::create("status");
     status.configure(this, null, "");
     status.build();
-    default_map.add_register(status, 'h4);
+    default_map.add_reg(status, 'h4);
   endfunction
 
   `uvm_object_utils(timer)
@@ -166,11 +166,11 @@ class soc extends uvm_reg_block;
   virtual function void build();
     default_map = create_map("default_map", 0, 4, UVM_LITTLE_ENDIAN, 0);
     timer0 = timer::type_id::create("timer0");
-    timer0.configure(this, null, "");
+    timer0.configure(this, "timer0");
     timer0.build();
     default_map.add_submap(timer0.default_map, 'h1000);
     timer1 = timer::type_id::create("timer1");
-    timer1.configure(this, null, "");
+    timer1.configure(this, "timer1");
     timer1.build();
     default_map.add_submap(timer1.default_map, 'h2000);
   endfunction

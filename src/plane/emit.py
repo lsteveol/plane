@@ -509,21 +509,39 @@ def _wrap_line_impl(line: str, prefix: str, cont_prefix: str, max_width: int) ->
 
     split_ops = [" = ", " | ", " & ", " + ", " ? ", " : "]
 
-    for op_str in split_ops:
+    def _find_split(op_str, max_pos):
+        """First )( -flanked occurrence of op_str at or before max_pos."""
         idx = 0
-        while idx < first_budget:
+        while True:
             pos = line.find(op_str, idx)
-            # Rendered segment is prefix + line[:pos] + operator (minus trailing
-            # space); at top level prefix is already inside line, so this is
-            # conservative there and exact for continuation lines.
-            if pos == -1 or len(prefix) + pos + len(op_str) - 1 > max_width:
-                break
-            before = pos - 1
+            if pos == -1 or pos > max_pos:
+                return None
             after = pos + len(op_str)
-            if before >= 0 and after < len(line) and line[before] == ")" and line[after] == "(":
-                tail = _wrap_line_impl(line[after:], cont_prefix, cont_prefix, max_width)
-                return line[:before + 1] + op_str.rstrip() + "\n" + cont_prefix + tail
+            if pos >= 1 and after < len(line) and line[pos - 1] == ")" and line[after] == "(":
+                return pos
             idx = pos + len(op_str)
+
+    def _split_at(op_str, pos):
+        tail = _wrap_line_impl(line[pos + len(op_str):], cont_prefix, cont_prefix, max_width)
+        return line[:pos] + op_str.rstrip() + "\n" + cont_prefix + tail
+
+    # Preferred: a split that keeps the rendered line within max_width.
+    # Rendered head is prefix + line[:pos] + operator; at top level prefix
+    # is already inside line, so this is conservative there and exact for
+    # continuation lines.
+    for op_str in split_ops:
+        pos = _find_split(op_str, max_width - len(prefix) - len(op_str) + 1)
+        if pos is not None:
+            return _split_at(op_str, pos)
+
+    # Fallback: no operator fits the budget (e.g. a long run of opening
+    # parens before the first operator). Split at the first flanked operator
+    # past the budget so only that one line overflows, instead of emitting
+    # the whole expression unwrapped.
+    for op_str in split_ops:
+        pos = _find_split(op_str, len(line))
+        if pos is not None:
+            return _split_at(op_str, pos)
 
     return line
 

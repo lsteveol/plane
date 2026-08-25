@@ -53,12 +53,50 @@ def test_fitting_line_unchanged():
     assert _wrap_line(line, "  ", 47) == line
 
 
-def test_no_split_point_stays_unwrapped():
-    # No )(-flanked operator fits in the budget; best-effort: line stays whole
+def test_tight_budget_splits_at_first_reachable_operator():
+    # Even one term exceeds the budget; the wrapper now degrades to
+    # splitting at the first reachable operator (one minimal-overflow line
+    # per term) instead of emitting the whole expression unwrapped.
     terms = " | ".join(f"({{32{{sel{i}}}}} & {{val{i}}})" for i in range(4))
     line = f"  assign rdata           = ({terms});"
 
-    assert _wrap_line(line, "  ", 40) == line
+    wrapped = _wrap_line(line, "  ", 40)
+    lines = wrapped.split("\n")
+
+    assert len(lines) == 4
+    assert all(ln.rstrip().endswith("|") for ln in lines[:-1])
+    # No line is longer than a single term plus its continuation indent
+    assert all(len(ln) <= len(line) for ln in lines)
+
+
+def test_paren_wall_isolated_to_first_line():
+    # Left-folded OR (e.g. CSR readback mux before the balanced-tree fix):
+    # N-1 opening parens precede the first operator, so no split fits the
+    # budget. The fallback must isolate the wall to one overflowing line
+    # and wrap the remaining terms within max_width.
+    terms = [f"({{32{{sel{i}}}}} & {{val{i}}})" for i in range(30)]
+    expr = terms[0]
+    for t in terms[1:]:
+        expr = f"({expr} | {t})"
+    line = f"  assign bus_rdata        = {expr};"
+
+    wrapped = _wrap_line(line, "  ", 120)
+    lines = wrapped.split("\n")
+
+    assert len(lines) > 1
+    assert all(len(ln) <= 120 for ln in lines[1:])
+    # First line carries the paren wall; its overflow is bounded by the
+    # wall plus one term, not the whole expression.
+    assert len(lines[0]) < len(line) / 2
+
+
+def test_no_flanked_operator_stays_unwrapped():
+    # Concatenation has no )(-flanked split operator at all; best-effort
+    # means the line stays whole.
+    parts = ", ".join(f"sig{i}" for i in range(40))
+    line = f"  assign cat             = {{{parts}}};"
+
+    assert _wrap_line(line, "  ", 60) == line
 
 
 def test_none_max_width_disables_wrapping():

@@ -488,10 +488,6 @@ def _wrap_line(line: str, prefix: str, max_width: int) -> str:
     if max_width is None or len(line) <= max_width:
         return line
 
-    first_budget = max_width - len(prefix)
-    if len(line) <= first_budget:
-        return line
-
     # Use the position of `=` as the alignment column for continuation lines
     eq_pos = line.find(" = ")
     if eq_pos >= 0:
@@ -504,7 +500,7 @@ def _wrap_line(line: str, prefix: str, max_width: int) -> str:
 
 def _wrap_line_impl(line: str, prefix: str, cont_prefix: str, max_width: int) -> str:
     """Internal recursive wrap logic."""
-    if max_width is None or len(line) <= max_width:
+    if max_width is None:
         return line
 
     first_budget = max_width - len(prefix)
@@ -517,7 +513,10 @@ def _wrap_line_impl(line: str, prefix: str, cont_prefix: str, max_width: int) ->
         idx = 0
         while idx < first_budget:
             pos = line.find(op_str, idx)
-            if pos == -1 or pos > first_budget:
+            # Rendered segment is prefix + line[:pos] + operator (minus trailing
+            # space); at top level prefix is already inside line, so this is
+            # conservative there and exact for continuation lines.
+            if pos == -1 or len(prefix) + pos + len(op_str) - 1 > max_width:
                 break
             before = pos - 1
             after = pos + len(op_str)
